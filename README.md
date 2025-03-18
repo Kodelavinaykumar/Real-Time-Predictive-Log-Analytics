@@ -35,3 +35,14 @@ try:
  data_buffer.clear()
  except Exception as e:
  # Log the error and continue
+print(f"An error occurred: {str(e)}")
+ continue
+ # Control the consumption rate
+ time.sleep(1)
+except Exception as e:
+ print(f"An error occurred: {str(e)}")
+finally:
+ # Clean up resources
+ consumer.stop()
+ hdfs_client.close()
+ print("Shutting down the script gracefully")
