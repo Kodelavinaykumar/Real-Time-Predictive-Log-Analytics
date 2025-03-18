@@ -1,0 +1,33 @@
+from pyspark.sql import SparkSession
+import os
+import sys
+# Set the PYSPARK_PYTHON environment variable to the Python interpreter you're currently
+using
+os.environ["PYSPARK_PYTHON"] = sys.executable
+# Create a Spark session
+spark = SparkSession.builder.appName("LogAnalysis") \
+ .config("spark.driver.memory", "4g") \
+ .config("spark.executor.memory", "4g") \
+ .getOrCreate()
+# Load data from HDFS into a DataFrame
+log_data = spark.read.text("hdfs://localhost:9000/user/log/log.txt")
+from pyspark.sql import SparkSession
+from pyspark.sql.functions import regexp_extract, col
+# Define regular expressions for extraction
+timestamp = r"(\d{4}-\d{2}-\d{2} \d{2}:\d{2}:\d{2}),\d{3}"
+value = r"(\d{3})"
+log_level = r"(DEBUG|INFO|ERROR|WARN)"
+message = r"(DEBUG|INFO|ERROR|WARN) (.+)"
+# Extract specific information
+log_data = log_data.withColumn("timestamp", regexp_extract(col("value"), timestamp, 1)) \
+ .withColumn("value_extracted", regexp_extract(col("value"), value, 1)) \
+ .withColumn("log_level", regexp_extract(col("value"), log_level, 1)) \
+ .withColumn("message_extracted", regexp_extract(col("value"), message, 2))
+# Format the message as requested
+log_data = log_data.withColumn("formatted_message",
+log_data["message_extracted"].substr(21, 1000).alias("formatted_message"))
+log_data = log_data.drop("value", "message_extracted")
+# Set the configuration to enable eager evaluation
+spark.conf.set("spark.sql.repl.eagerEval.enabled", True)
+# Display the transformed data without extra blank rows
+log_data.show(truncate=False)
