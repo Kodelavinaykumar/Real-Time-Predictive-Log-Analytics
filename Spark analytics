@@ -31,3 +31,290 @@ log_data = log_data.drop("value", "message_extracted")
 spark.conf.set("spark.sql.repl.eagerEval.enabled", True)
 # Display the transformed data without extra blank rows
 log_data.show(truncate=False)
+from pyspark.sql.functions import col, sum as spark_sum
+# Assuming 'log_data' is your Spark DataFrame
+missing_counts = log_data.agg(*[spark_sum(col(c).isNull().cast("int")).alias(c) for c in log_data.columns
+])
+from pyspark.sql.functions import col
+# Filter out rows where log_level is empty
+ filtered_df = log_data.filter(col("log_level") != "")
+filtered_df.show()
+filtered_df.count()
+# Assuming you have a PySpark DataFrame named log_data
+# Import necessary PySpark functions
+from pyspark.sql.functions import desc
+# Sort the DataFrame by timestamp in descending order
+log_data_sorted = filtered_df.orderBy(desc('timestamp'))
+# Fetch the last 30 records
+last_30_records = log_data_sorted.limit(30)
+# Show the last 30 records
+last_30_records.show()
+import pandas as pd
+import plotly.express as px
+log_pandas = filtered_df.toPandas()
+# Create a bar plot for log levels
+log_level_count = log_pandas['log_level'].value_counts()
+log_level_fig = px.bar(x=log_level_count.index, y=log_level_count.values,
+labels={'x':'Log Level', 'y':'Count'})
+log_level_fig.update_layout(title='Log Level Distribution')
+# Display the plot
+log_level_fig.show()
+import plotly.express as px
+from pyspark.sql.functions import col
+# Assuming 'timestamp' is the column with the timestamp format '2023-11-20 01:13:32'
+# Extract date and hour from timestamp
+filtered_df = filtered_df.withColumn('date', col('timestamp').substr(1, 10))
+filtered_df = filtered_df.withColumn('hour', col('timestamp').substr(12, 2))
+# Aggregate log count per day
+log_count_per_day = filtered_df.groupBy('date').count().orderBy('date').toPandas()
+# Aggregate log count per hour
+log_count_per_hour = filtered_df.groupBy('hour').count().orderBy('hour').toPandas()
+# Create a Plotly figure with dropdown menu for time range selection
+fig = px.line(log_count_per_day, x='date', y='count', title='Log Count Over Time',
+labels={'date': 'Date', 'count': 'Log Count'})
+fig.update_xaxes(rangeslider_visible=True) # Add range slider for zooming
+# Create a dropdown menu for time range selection
+fig.update_layout(
+ updatemenus=[
+ dict(
+ buttons=list([
+ dict(label='Day', method='update', args=[{'x': [log_count_per_day['date']], 'y':
+[log_count_per_day['count']]}]),
+ dict(label='Hour', method='update', args=[{'x': [log_count_per_hour['hour']], 'y':
+[log_count_per_hour['count']]}]),
+ # Add more options like week, month, year following the same pattern
+ ]),
+ direction='down',
+ showactive=True,
+ x=0.1,xanchor='left',
+ y=1.15,
+ yanchor='top'
+ ),])
+# Show the Plotly figure
+fig.show()
+from pyspark.sql import SparkSession
+from pyspark.sql.functions import col
+# Filter logs with 'ERROR' level
+error_logs = filtered_df.filter(col('log_level') == 'ERROR')
+# Count the number of error logs
+num_errors = error_logs.count()
+# Show a sample of error logs
+error_logs.show()
+import plotly.express as px
+# Assuming 'error_logs' DataFrame contains the filtered error logs
+error_counts = error_logs.groupBy('log_level').count().toPandas()
+# Create a colorful bar chart using 'log_level' for color variation
+fig = px.bar(error_counts, x='log_level', y='count', color='log_level',
+ labels={'log_level': 'Log Level', 'count': 'Count'},
+ title='Count of Errors by Log Level')
+# Show the plot
+fig.show()
+import plotly.express as px
+# Assuming 'error_logs' DataFrame contains the filtered error logs
+# Assuming 'timestamp' is the column containing the timestamps
+# Assuming 'log_level' is the column containing error levels
+# Aggregate error counts per timestamp
+error_counts_per_timestamp = error_logs.groupBy('date').count().toPandas()
+# Create a time series line plot for error counts
+fig = px.line(error_counts_per_timestamp, x='date', y='count',
+ labels={'timestamp': 'Timestamp', 'count': 'Error Count'},
+ title='Error Count Over Time')
+# Show the plot
+fig.show()
+filtered_df.show()
+filtered_df.describe().show()
+filtered_df.printSchema()
+from pyspark.sql.functions import col
+# Example: Count of log entries per hour
+hourly_counts = filtered_df.groupBy("hour").count()
+# Example: Extracting keywords from log messages
+from pyspark.ml.feature import Tokenizer, StopWordsRemover
+tokenizer = Tokenizer(inputCol="formatted_message", outputCol="words")
+words_data = tokenizer.transform(log_data)
+remover = StopWordsRemover(inputCol="words", outputCol="filtered")
+words_filtered = remover.transform(words_data)
+# Further analysis can be conducted on 'words_filtered'
+hourly_counts_pd = hourly_counts.toPandas()
+import matplotlib.pyplot as plt
+# Example: Plotting hourly log counts
+hourly_counts_pd.plot(kind='bar', x='hour', y='count')
+plt.title('Hourly Log Counts')
+plt.xlabel('Hour')
+plt.ylabel('Count')
+plt.show()
+log_levels_per_day = filtered_df.groupBy("date", "log_level").count()
+log_levels_per_day.show()
+error_messages = filtered_df.filter(col("log_level") == "ERROR").groupBy("date").count()
+error_messages.show()
+log_levels_per_day_pd = log_levels_per_day.toPandas()
+error_messages_pd = error_messages.toPandas()
+import matplotlib.pyplot as plt
+import seaborn as sns
+plt.figure(figsize=(10, 6))
+sns.lineplot(data=log_levels_per_day_pd, x="date", y="count", hue="log_level")
+plt.xticks(rotation=45)
+plt.title("Log Levels Per Day")
+plt.show()
+plt.figure(figsize=(10, 6))
+sns.lineplot(data=error_messages_pd, x="date", y="count")
+plt.xticks(rotation=45)
+plt.title("Error Messages Over Time")
+plt.show()
+import pandas as pd
+import matplotlib.pyplot as plt
+import seaborn as sns
+log_level_counts = filtered_df.groupBy("log_level").count()
+error_peak_hours = filtered_df.filter(col("log_level") == "ERROR").groupBy("hour").count()
+# Convert to Pandas DataFrame
+log_level_counts_pd = log_level_counts.toPandas()
+error_peak_hours_pd = error_peak_hours.toPandas()
+# Plotting
+sns.barplot(data=log_level_counts_pd, x="log_level", y="count")
+plt.title("Log Level Counts")
+plt.show()
+sns.barplot(data=error_peak_hours_pd, x="hour", y="count")
+plt.title("Error Peak Hours")
+plt.show()
+trend_analysis = filtered_df.groupBy("date", "log_level").count()
+import plotly.express as px
+fig = px.line(trend_analysis.toPandas(), x="date", y="count", color="log_level")
+fig.show()
+from pyspark.sql.functions import dayofweek, hour
+from pyspark.ml.feature import StringIndexer, OneHotEncoder
+# Example: Extracting day of the week and hour from timestamp
+filtered_df = filtered_df.withColumn("day_of_week", dayofweek("timestamp"))
+filtered_df = filtered_df.withColumn("hour_of_day", hour("timestamp"))
+# Convert 'log_level' to numeric using OneHotEncoder
+indexer = StringIndexer(inputCol="log_level", outputCol="log_level_index")
+filtered_df = indexer.fit(filtered_df).transform(filtered_df)
+encoder = OneHotEncoder(inputCol="log_level_index", outputCol="log_level_vec")
+filtered_df = encoder.fit(filtered_df).transform(filtered_df)
+from pyspark.sql.functions import when
+filtered_df = filtered_df.withColumn("label", when(filtered_df["log_level"] == "ERROR",
+1).otherwise(0))
+from pyspark.ml.feature import VectorAssembler
+assembler = VectorAssembler(inputCols=["log_level_vec", "hour_of_day", "day_of_week"],
+outputCol="features")
+final_data = assembler.transform(filtered_df)
+from pyspark.ml.classification import LogisticRegression
+# Train the model
+lr = LogisticRegression(featuresCol="features", labelCol="label")
+model = lr.fit(final_data)
+# Make predictions
+predictions = model.transform(final_data)
+from pyspark.ml.evaluation import BinaryClassificationEvaluator
+evaluator = BinaryClassificationEvaluator(labelCol="label", rawPredictionCol="prediction")
+accuracy = evaluator.evaluate(predictions)
+print("Accuracy:", accuracy)
+from pyspark.sql.functions import to_date
+# Assuming 'timestamp' is in a format that can be converted to date
+filtered_df = filtered_df.withColumn("date", to_date("timestamp"))
+daily_logs = filtered_df.groupBy("date").count()
+from pyspark.sql.window import Window
+from pyspark.sql.functions import row_number
+windowSpec = Window.orderBy("date")
+daily_logs = daily_logs.withColumn("day_num", row_number().over(windowSpec) - 1)
+from pyspark.ml.feature import VectorAssembler
+from pyspark.ml.regression import LinearRegression
+assembler = VectorAssembler(inputCols=["day_num"], outputCol="features")
+daily_logs = assembler.transform(daily_logs)
+lr = LinearRegression(featuresCol="features", labelCol="count")
+model = lr.fit(daily_logs)
+import matplotlib.pyplot as plt
+# Convert to Pandas for plotting
+past_data = daily_logs.select("date", "count").toPandas()
+future_data = future_predictions.select("date", "prediction").toPandas()
+# Plot
+plt.figure(figsize=(12, 6))
+plt.plot(past_data["date"], past_data["count"], label="Actual Log Count")
+plt.plot(future_data["date"], future_data["prediction"], label="Forecasted Log Count",
+linestyle='--')
+plt.xlabel("Date")
+plt.ylabel("Number of Logs")
+plt.title("Log Count Forecast")
+plt.legend()
+plt.show()
+from pyspark.sql import SparkSession
+from pyspark.sql.functions import col
+# Initialize Spark Session
+# Calculate the count of each log level
+log_level_counts = filtered_df.groupBy("log_level").count()
+# Calculate total number of logs
+total_logs = filtered_df.count()
+# Calculate the frequency of each log level
+log_level_frequencies = log_level_counts.withColumn("frequency", col("count") / total_logs)
+# Sort by frequency to find the most common log level
+most_common_log_level = log_level_frequencies.orderBy(col("frequency").desc()).first()
+# Print the most common log level
+print(f"The most common log level is: {most_common_log_level['log_level']} with a frequency
+of {most_common_log_level['frequency']}")
+pip install pandas matplotlib statsmodels
+import pandas as pd
+import matplotlib.pyplot as plt
+from statsmodels.tsa.arima.model import ARIMA
+from pyspark.sql import SparkSession
+pandas_df = filtered_df.toPandas()
+# Convert 'timestamp' to datetime and set as index
+pandas_df['timestamp'] = pd.to_datetime(pandas_df['timestamp'])
+pandas_df.set_index('timestamp', inplace=True)
+# Resample to get daily counts for each log level
+log_level_counts = pandas_df.groupby([pandas_df.index.date,
+'log_level']).size().unstack(fill_value=0)
+# Forecasting for each log level
+import numpy as np
+for column in log_level_counts.columns:
+ # Using last 30 days data for forecasting
+ ts = log_level_counts[column].tail(30)
+ # Fit ARIMA model
+ model = ARIMA(ts, order=(1, 1, 1))
+ model_fit = model.fit()
+ # Forecast next 7 days
+ forecast = model_fit.forecast(steps=7)
+ # Correctly generating date range for forecast plot
+ last_date = ts.index[-1]
+ forecast_dates = pd.date_range(start=last_date, periods=8, freq='D')[1:]
+ # Plotting
+ plt.figure(figsize=(10, 5))
+ plt.plot(ts.index, ts, label='Historical Count')
+ plt.plot(forecast_dates, forecast, label='Forecast', linestyle='--')
+ plt.title(f'Log Level {column} - Forecast')
+ plt.xlabel('Date')
+ plt.ylabel('Count')
+ plt.legend()
+ plt.show()
+import mysql.connector
+import pandas as pd
+# Convert the PySpark DataFrame to Pandas DataFrame
+pandas_df = filtered_df.toPandas()
+# Replace these with your actual database connection details
+db_connection = mysql.connector.connect(
+ host="localhost",
+ user="root",
+ passwd="",
+ database="log"
+)
+cursor = db_connection.cursor()
+from pyspark.ml.linalg import SparseVector
+# Define a conversion function
+def sparse_vector_to_string(vector):
+ if isinstance(vector, SparseVector):
+ return str(vector)
+ return vector
+# Apply the conversion to the DataFrame
+pandas_df['log_level_vec'] = pandas_df['log_level_vec'].apply(sparse_vector_to_string)
+# Constructing an SQL query for inserting data
+ insert_stmt = (
+ "INSERT INTO log_data (timestamp, value_extracted, log_level, formatted_message, date, hour,
+day_of_week, hour_of_day, log_level_index, log_level_vec, label) "
+ "VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s)"
+ )
+ # Iterating over the DataFrame rows to insert data
+ # Insert data into MySQL
+ for row in pandas_df.itertuples(index=False, name=None):
+ cursor.execute(insert_stmt, row)
+ # Commit the changes
+ db_connection.commit()
+ # Close the cursor and connection
+ cursor.close()
+ db_connection.close()
+
